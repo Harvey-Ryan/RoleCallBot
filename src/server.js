@@ -25,6 +25,36 @@ function memberInfo(guild, userId) {
 
 export function startServer(client) {
   const app = express();
+  const API_KEY     = process.env.ROLECALL_API_KEY;
+  const CORS_ORIGIN = process.env.CORS_ORIGIN;
+
+  if (!API_KEY) {
+    console.warn('[server] ROLECALL_API_KEY not set — API is unprotected');
+  }
+
+  // ── CORS (scoped to /api only) ───────────────────────────────────────────
+  app.use('/api', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (CORS_ORIGIN) {
+      if (origin === CORS_ORIGIN) res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // ── API key auth (scoped to /api only) ──────────────────────────────────
+  app.use('/api', (req, res, next) => {
+    if (!API_KEY) return next();
+    const auth = req.headers.authorization;
+    if (!auth || auth !== `Bearer ${API_KEY}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  });
 
   app.use(express.static(join(__dirname, '..', 'dashboard')));
 
