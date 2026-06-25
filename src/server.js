@@ -1,9 +1,6 @@
 import express from 'express';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import { db, getGuildConfig } from './database.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 function defaultAvatar(userId) {
@@ -55,8 +52,6 @@ export function startServer(client) {
     }
     next();
   });
-
-  app.use(express.static(join(__dirname, '..', 'dashboard')));
 
   // Pre-warm the member cache for all guilds so the dashboard resolves names
   setTimeout(async () => {
