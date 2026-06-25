@@ -1,5 +1,5 @@
 import express from 'express';
-import { db, getGuildConfig } from './database.js';
+import { db, getGuildConfig, invalidateConfig } from './database.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -37,11 +37,13 @@ export function startServer(client) {
     } else {
       res.setHeader('Access-Control-Allow-Origin', '*');
     }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
+
+  app.use(express.json());
 
   // ── API key auth (scoped to /api only) ──────────────────────────────────
   app.use('/api', (req, res, next) => {
@@ -180,6 +182,106 @@ export function startServer(client) {
         history:      histRows,
         member:       memberInfo(guild, userId),
       });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── GET /api/config ──────────────────────────────────────────────────────
+  app.get('/api/config', async (req, res) => {
+    const { guildId } = req.query;
+    if (!guildId) return res.status(400).json({ error: 'guildId required' });
+    try {
+      const config = await getGuildConfig(guildId);
+      res.json(config);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── PATCH /api/config ────────────────────────────────────────────────────
+  app.patch('/api/config', async (req, res) => {
+    const { guildId } = req.query;
+    if (!guildId) return res.status(400).json({ error: 'guildId required' });
+
+    const {
+      inactivity_days, active_role_id, inactive_role_id,
+      achievements_channel_id, leaderboard_channel_id,
+      leaderboard_schedule, message_weight, voice_weight,
+    } = req.body ?? {};
+
+    // Validate
+    if (inactivity_days !== undefined && (typeof inactivity_days !== 'number' || inactivity_days < 1 || inactivity_days > 365))
+      return res.status(400).json({ error: 'inactivity_days must be 1–365' });
+    if (leaderboard_schedule !== undefined && !['daily', 'weekly'].includes(leaderboard_schedule))
+      return res.status(400).json({ error: 'leaderboard_schedule must be daily or weekly' });
+    if (message_weight !== undefined && (typeof message_weight !== 'number' || message_weight < 0))
+      return res.status(400).json({ error: 'message_weight must be >= 0' });
+    if (voice_weight !== undefined && (typeof voice_weight !== 'number' || voice_weight < 0))
+      return res.status(400).json({ error: 'voice_weight must be >= 0' });
+
+    const fields = [];
+    const values = [];
+    let i = 1;
+    const set = (col, val) => { fields.push(`${col} = $${i++}`); values.push(val); };
+
+    if (inactivity_days         !== undefined) set('inactivity_days',         Math.round(inactivity_days));
+    if (active_role_id          !== undefined) set('active_role_id',          active_role_id ?? null);
+    if (inactive_role_id        !== undefined) set('inactive_role_id',        inactive_role_id ?? null);
+    if (achievements_channel_id !== undefined) set('achievements_channel_id', achievements_channel_id ?? null);
+    if (leaderboard_channel_id  !== undefined) set('leaderboard_channel_id',  leaderboard_channel_id ?? null);
+    if (leaderboard_schedule     !== undefined) set('leaderboard_schedule',    leaderboard_schedule);
+    if (message_weight          !== undefined) set('message_weight',          message_weight);
+    if (voice_weight            !== undefined) set('voice_weight',            voice_weight);
+
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    set('updated_at', new Date());
+    values.push(guildId);
+
+    try {
+      await db.query(
+        `INSERT INTO guild_config (guild_id) VALUES ($${i}) ON CONFLICT (guild_id) DO NOTHING`,
+        [guildId]
+      );
+      await db.query(
+        `UPDATE guild_config SET ${fields.join(', ')} WHERE guild_id = $${i}`,
+        values
+      );
+      invalidateConfig(guildId);
+      const config = await getGuildConfig(guildId);
+      res.json(config);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── GET /api/role-change-log ─────────────────────────────────────────────
+  app.get('/api/role-change-log', async (req, res) => {
+    const { guildId, page = '1' } = req.query;
+    if (!guildId) return res.status(400).json({ error: 'guildId required' });
+    try {
+      const guild  = client.guilds.cache.get(guildId);
+      const pg     = Math.max(1, parseInt(page));
+      const offset = (pg - 1) * 50;
+
+      const [{ rows: countRows }, { rows }] = await Promise.all([
+        db.query(`SELECT COUNT(*) FROM role_change_log WHERE guild_id = $1`, [guildId]),
+        db.query(
+          `SELECT id, user_id, change_type, roles_removed, roles_added, reason, changed_at
+           FROM role_change_log WHERE guild_id = $1
+           ORDER BY changed_at DESC LIMIT 50 OFFSET $2`,
+          [guildId, offset]
+        ),
+      ]);
+
+      const total = parseInt(countRows[0].count);
+      const rowsWithMeta = rows.map(r => ({
+        ...r,
+        ...memberInfo(guild, r.user_id),
+      }));
+
+      res.json({ rows: rowsWithMeta, total, page: pg, totalPages: Math.max(1, Math.ceil(total / 50)) });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
