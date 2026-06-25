@@ -114,6 +114,20 @@ export async function initSchema() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS activity_hourly (
+      user_id    TEXT        NOT NULL,
+      guild_id   TEXT        NOT NULL,
+      hour_utc   TIMESTAMPTZ NOT NULL,
+      messages   INTEGER     NOT NULL DEFAULT 0,
+      voice_mins NUMERIC     NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, guild_id, hour_utc)
+    )
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_ah_guild_hour ON activity_hourly (guild_id, hour_utc)
+  `);
+
+  await db.query(`
     INSERT INTO achievements (guild_id, name, description, emoji, type, threshold) VALUES
       (NULL, 'First Step',      'Sent your first message or joined voice for the first time', '👋', 'newcomer',          NULL),
       (NULL, 'Getting Started', 'Sent 10 messages',                                           '💬', 'message_milestone', 10),

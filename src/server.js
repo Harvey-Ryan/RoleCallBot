@@ -287,5 +287,72 @@ export function startServer(client) {
     }
   });
 
+  // ── GET /api/heatmap/guild ───────────────────────────────────────────────────
+  app.get('/api/heatmap/guild', async (req, res) => {
+    const { guildId, days = '180', timezone = 'UTC' } = req.query;
+    if (!guildId) return res.status(400).json({ error: 'guildId required' });
+    try {
+      const config = await getGuildConfig(guildId);
+      const { rows } = await db.query(
+        `SELECT
+           EXTRACT(DOW FROM hour_utc AT TIME ZONE $3)::int AS dow,
+           EXTRACT(HOUR FROM hour_utc AT TIME ZONE $3)::int AS hr,
+           SUM(messages)   AS messages,
+           SUM(voice_mins) AS voice_mins
+         FROM activity_hourly
+         WHERE guild_id = $1
+           AND hour_utc >= NOW() - ($2 || ' days')::INTERVAL
+         GROUP BY dow, hr`,
+        [guildId, days, timezone]
+      );
+      const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+      let max = 0;
+      for (const row of rows) {
+        const score = Number(row.messages) * Number(config.message_weight) +
+                      Number(row.voice_mins) * Number(config.voice_weight);
+        grid[row.dow][row.hr] = score;
+        if (score > max) max = score;
+      }
+      res.json({ guild_id: guildId, days: Number(days), timezone, grid, max });
+    } catch (err) {
+      console.error('[heatmap/guild]', err);
+      res.status(500).json({ error: 'Internal error' });
+    }
+  });
+
+  // ── GET /api/heatmap/user ────────────────────────────────────────────────────
+  app.get('/api/heatmap/user', async (req, res) => {
+    const { guildId, userId, days = '180', timezone = 'UTC' } = req.query;
+    if (!guildId || !userId) return res.status(400).json({ error: 'guildId and userId required' });
+    try {
+      const config = await getGuildConfig(guildId);
+      const { rows } = await db.query(
+        `SELECT
+           EXTRACT(DOW FROM hour_utc AT TIME ZONE $4)::int AS dow,
+           EXTRACT(HOUR FROM hour_utc AT TIME ZONE $4)::int AS hr,
+           SUM(messages)   AS messages,
+           SUM(voice_mins) AS voice_mins
+         FROM activity_hourly
+         WHERE guild_id = $1
+           AND user_id = $2
+           AND hour_utc >= NOW() - ($3 || ' days')::INTERVAL
+         GROUP BY dow, hr`,
+        [guildId, userId, days, timezone]
+      );
+      const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+      let max = 0;
+      for (const row of rows) {
+        const score = Number(row.messages) * Number(config.message_weight) +
+                      Number(row.voice_mins) * Number(config.voice_weight);
+        grid[row.dow][row.hr] = score;
+        if (score > max) max = score;
+      }
+      res.json({ user_id: userId, guild_id: guildId, days: Number(days), timezone, grid, max });
+    } catch (err) {
+      console.error('[heatmap/user]', err);
+      res.status(500).json({ error: 'Internal error' });
+    }
+  });
+
   app.listen(PORT, () => console.log(`[dashboard] http://localhost:${PORT}`));
 }

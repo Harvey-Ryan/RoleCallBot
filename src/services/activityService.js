@@ -24,6 +24,15 @@ export async function recordMessageActivity(userId, guildId, client) {
   );
 
   const activity = rows[0];
+
+  await db.query(
+    `INSERT INTO activity_hourly (user_id, guild_id, hour_utc, messages)
+     VALUES ($1, $2, date_trunc('hour', NOW()), 1)
+     ON CONFLICT (user_id, guild_id, hour_utc) DO UPDATE SET
+       messages = activity_hourly.messages + 1`,
+    [userId, guildId]
+  );
+
   await checkAndAwardAchievements(userId, guildId, activity, activity.is_new, client);
 }
 
@@ -49,5 +58,14 @@ export async function recordVoiceEnd(userId, guildId, minutes, client) {
   );
 
   const activity = rows[0];
+
+  await db.query(
+    `INSERT INTO activity_hourly (user_id, guild_id, hour_utc, voice_mins)
+     VALUES ($1, $2, date_trunc('hour', NOW()), $3)
+     ON CONFLICT (user_id, guild_id, hour_utc) DO UPDATE SET
+       voice_mins = activity_hourly.voice_mins + $3`,
+    [userId, guildId, minutes]
+  );
+
   await checkAndAwardAchievements(userId, guildId, activity, activity.is_new, client);
 }

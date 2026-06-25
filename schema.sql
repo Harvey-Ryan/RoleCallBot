@@ -62,3 +62,13 @@ INSERT INTO achievements (guild_id, name, description, emoji, type, threshold) V
   (NULL, 'Week Warrior',    'Active 7 days in a row',                                     '🔥', 'streak',            7),
   (NULL, 'Monthly Legend',  'Active 30 days in a row',                                    '💎', 'streak',            30)
 ON CONFLICT (name) WHERE guild_id IS NULL DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS activity_hourly (
+  user_id    TEXT        NOT NULL,
+  guild_id   TEXT        NOT NULL,
+  hour_utc   TIMESTAMPTZ NOT NULL,
+  messages   INTEGER     NOT NULL DEFAULT 0,
+  voice_mins NUMERIC     NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, guild_id, hour_utc)
+);
+CREATE INDEX IF NOT EXISTS idx_ah_guild_hour ON activity_hourly (guild_id, hour_utc);
