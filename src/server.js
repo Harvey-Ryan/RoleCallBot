@@ -45,6 +45,49 @@ export function startServer(client) {
 
   app.use(express.json());
 
+  // ── GET /api/public/heatmap ──────────────────────────────────────────────
+  // No API key required — public endpoint for the recruitment squeeze page.
+  // Registered before the auth middleware so it bypasses the key check.
+  app.get('/api/public/heatmap', async (req, res) => {
+    const { guildId, days = '365', timezone = 'UTC', type = 'combined' } = req.query;
+    if (!guildId) return res.status(400).json({ error: 'guildId required' });
+    if (!['combined', 'message', 'voice'].includes(type)) {
+      return res.status(400).json({ error: 'type must be combined, message, or voice' });
+    }
+    try {
+      const config = await getGuildConfig(guildId);
+      const { rows } = await db.query(
+        `SELECT
+           EXTRACT(DOW FROM hour_utc AT TIME ZONE $3)::int AS dow,
+           EXTRACT(HOUR FROM hour_utc AT TIME ZONE $3)::int AS hr,
+           SUM(messages)   AS messages,
+           SUM(voice_mins) AS voice_mins
+         FROM activity_hourly
+         WHERE guild_id = $1
+           AND hour_utc >= NOW() - ($2 || ' days')::INTERVAL
+         GROUP BY dow, hr`,
+        [guildId, days, timezone]
+      );
+      const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+      let max = 0;
+      for (const row of rows) {
+        const score = type === 'message'
+          ? Number(row.messages)
+          : type === 'voice'
+            ? Number(row.voice_mins)
+            : Number(row.messages) * Number(config.message_weight) +
+              Number(row.voice_mins) * Number(config.voice_weight);
+        grid[row.dow][row.hr] = score;
+        if (score > max) max = score;
+      }
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.json({ guild_id: guildId, days: Number(days), timezone, type, grid, max });
+    } catch (err) {
+      console.error('[public/heatmap]', err);
+      res.status(500).json({ error: 'Internal error' });
+    }
+  });
+
   // ── API key auth (scoped to /api only) ──────────────────────────────────
   app.use('/api', (req, res, next) => {
     if (!API_KEY) return next();
