@@ -5,6 +5,7 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
+    "prestart": "node src/commands/deploy.js",
     "start": "node src/index.js",
     "deploy": "node src/commands/deploy.js"
   },
