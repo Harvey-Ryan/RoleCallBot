@@ -29,6 +29,16 @@ export function startServer(client) {
     console.warn('[server] ROLECALL_API_KEY not set — API is unprotected');
   }
 
+  // ── Public endpoint preflight — must be before the main CORS middleware ────
+  // The main CORS middleware restricts by CORS_ORIGIN; the public heatmap must
+  // always allow any origin so the squeeze page can reach it.
+  app.options('/api/public/heatmap', (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.sendStatus(204);
+  });
+
   // ── CORS (scoped to /api only) ───────────────────────────────────────────
   app.use('/api', (req, res, next) => {
     const origin = req.headers.origin;
@@ -80,6 +90,7 @@ export function startServer(client) {
         grid[row.dow][row.hr] = score;
         if (score > max) max = score;
       }
+      res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=300');
       res.json({ guild_id: guildId, days: Number(days), timezone, type, grid, max });
     } catch (err) {
