@@ -289,8 +289,11 @@ export function startServer(client) {
 
   // ── GET /api/heatmap/guild ───────────────────────────────────────────────────
   app.get('/api/heatmap/guild', async (req, res) => {
-    const { guildId, days = '180', timezone = 'UTC' } = req.query;
+    const { guildId, days = '180', timezone = 'UTC', type = 'combined' } = req.query;
     if (!guildId) return res.status(400).json({ error: 'guildId required' });
+    if (!['combined', 'message', 'voice'].includes(type)) {
+      return res.status(400).json({ error: 'type must be combined, message, or voice' });
+    }
     try {
       const config = await getGuildConfig(guildId);
       const { rows } = await db.query(
@@ -308,12 +311,16 @@ export function startServer(client) {
       const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
       let max = 0;
       for (const row of rows) {
-        const score = Number(row.messages) * Number(config.message_weight) +
-                      Number(row.voice_mins) * Number(config.voice_weight);
+        const score = type === 'message'
+          ? Number(row.messages)
+          : type === 'voice'
+            ? Number(row.voice_mins)
+            : Number(row.messages) * Number(config.message_weight) +
+              Number(row.voice_mins) * Number(config.voice_weight);
         grid[row.dow][row.hr] = score;
         if (score > max) max = score;
       }
-      res.json({ guild_id: guildId, days: Number(days), timezone, grid, max });
+      res.json({ guild_id: guildId, days: Number(days), timezone, type, grid, max });
     } catch (err) {
       console.error('[heatmap/guild]', err);
       res.status(500).json({ error: 'Internal error' });
@@ -322,8 +329,11 @@ export function startServer(client) {
 
   // ── GET /api/heatmap/user ────────────────────────────────────────────────────
   app.get('/api/heatmap/user', async (req, res) => {
-    const { guildId, userId, days = '180', timezone = 'UTC' } = req.query;
+    const { guildId, userId, days = '180', timezone = 'UTC', type = 'combined' } = req.query;
     if (!guildId || !userId) return res.status(400).json({ error: 'guildId and userId required' });
+    if (!['combined', 'message', 'voice'].includes(type)) {
+      return res.status(400).json({ error: 'type must be combined, message, or voice' });
+    }
     try {
       const config = await getGuildConfig(guildId);
       const { rows } = await db.query(
@@ -342,12 +352,16 @@ export function startServer(client) {
       const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
       let max = 0;
       for (const row of rows) {
-        const score = Number(row.messages) * Number(config.message_weight) +
-                      Number(row.voice_mins) * Number(config.voice_weight);
+        const score = type === 'message'
+          ? Number(row.messages)
+          : type === 'voice'
+            ? Number(row.voice_mins)
+            : Number(row.messages) * Number(config.message_weight) +
+              Number(row.voice_mins) * Number(config.voice_weight);
         grid[row.dow][row.hr] = score;
         if (score > max) max = score;
       }
-      res.json({ user_id: userId, guild_id: guildId, days: Number(days), timezone, grid, max });
+      res.json({ user_id: userId, guild_id: guildId, days: Number(days), timezone, type, grid, max });
     } catch (err) {
       console.error('[heatmap/user]', err);
       res.status(500).json({ error: 'Internal error' });
