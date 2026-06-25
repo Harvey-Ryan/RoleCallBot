@@ -14,10 +14,13 @@ for (const file of files) {
 }
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+const guildId = process.env.TEST_GUILD_ID;
 
-console.log(`Registering ${commands.length} application commands...`);
+console.log(`Registering ${commands.length} commands ${guildId ? `to guild ${guildId} (instant)` : 'globally (up to 1 hour)'}...`);
 await rest.put(
-  Routes.applicationCommands(process.env.CLIENT_ID),
+  guildId
+    ? Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId)
+    : Routes.applicationCommands(process.env.CLIENT_ID),
   { body: commands }
 );
-console.log('Done! Commands registered globally (may take up to 1 hour to appear).');
+console.log('Done!');
