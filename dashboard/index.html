@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoleCallBot — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="stars" aria-hidden="true"></div>
+
+  <nav class="nav">
+    <a class="nav__brand" href="#leaderboard">
+      <span class="nav__title">ROLECALLBOT</span>
+      <span class="nav__sub">ACTIVITY DASHBOARD</span>
+    </a>
+    <select class="nav__guild" id="guildSelect" aria-label="Select server">
+      <option value="">Loading…</option>
+    </select>
+  </nav>
+
+  <main class="main">
+
+    <!-- ─── LEADERBOARD VIEW ─────────────────────────────────────────── -->
+    <div class="view" id="view-leaderboard">
+
+      <div class="summary-cards" id="summaryCards">
+        <div class="summary-card summary-card--skeleton"></div>
+        <div class="summary-card summary-card--skeleton"></div>
+        <div class="summary-card summary-card--skeleton"></div>
+        <div class="summary-card summary-card--skeleton"></div>
+      </div>
+
+      <div class="section-header">
+        <h2 class="section-header__title">LEADERBOARD</h2>
+        <span class="section-header__sub" id="lbMeta"></span>
+      </div>
+
+      <div class="lb-list" id="lbList">
+        <p class="lb-empty">Select a server above to view the leaderboard.</p>
+      </div>
+
+      <div class="pagination" id="lbPagination"></div>
+
+    </div>
+
+    <!-- ─── MEMBER VIEW ──────────────────────────────────────────────── -->
+    <div class="view hidden" id="view-member">
+
+      <button class="back-btn" id="backBtn">← LEADERBOARD</button>
+
+      <div id="memberHeader"></div>
+
+      <div class="member-stats" id="memberStats"></div>
+
+      <div class="section-header" style="margin-top:2rem">
+        <h2 class="section-header__title">ACHIEVEMENTS</h2>
+        <span class="section-header__sub" id="achMeta"></span>
+      </div>
+      <div class="ach-list" id="achList"></div>
+
+      <div class="section-header" style="margin-top:2rem">
+        <h2 class="section-header__title">ROLE HISTORY</h2>
+      </div>
+      <div class="history-list" id="historyList"></div>
+
+    </div>
+
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
