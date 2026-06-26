@@ -295,7 +295,7 @@ export function startServer(client) {
 
     try {
       await db.query(
-        `INSERT INTO guild_config (guild_id) VALUES ($${i}) ON CONFLICT (guild_id) DO NOTHING`,
+        `INSERT INTO guild_config (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING`,
         [guildId]
       );
       await db.query(
