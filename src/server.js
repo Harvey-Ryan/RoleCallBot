@@ -106,18 +106,20 @@ export function startServer(client) {
   // Returns the average number of distinct active users per day over the last
   // 30 days, excluding days with zero activity from the average.
   app.get('/api/public/daily-active-avg', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=300');
     const { guildId } = req.query;
     if (!guildId) return res.status(400).json({ error: 'guildId required' });
     try {
       const { rows } = await db.query(
         `WITH daily AS (
            SELECT
-             DATE(hour_utc)          AS day,
-             COUNT(DISTINCT user_id) AS active_users
+             DATE(hour_utc AT TIME ZONE 'UTC') AS day,
+             COUNT(DISTINCT user_id)            AS active_users
            FROM activity_hourly
            WHERE guild_id = $1
              AND hour_utc >= NOW() - INTERVAL '30 days'
-           GROUP BY DATE(hour_utc)
+           GROUP BY DATE(hour_utc AT TIME ZONE 'UTC')
          )
          SELECT
            COUNT(*)                 AS days_with_activity,
@@ -126,8 +128,6 @@ export function startServer(client) {
          WHERE active_users > 0`,
         [guildId]
       );
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=300');
       res.json({
         guild_id:           guildId,
         days_with_activity: parseInt(rows[0].days_with_activity) || 0,
