@@ -183,7 +183,7 @@ export function startServer(client) {
            COALESCE(SUM(voice_minutes), 0)                       AS total_voice_minutes,
            COUNT(*) FILTER (WHERE is_inactive = TRUE)            AS inactive_count,
            COALESCE(MAX(streak_days), 0)                         AS top_streak
-         FROM user_activity WHERE guild_id = $1`,
+         FROM user_activity WHERE guild_id = $1 AND has_left = FALSE`,
         [guildId]
       );
       res.json(rows[0]);
@@ -203,14 +203,14 @@ export function startServer(client) {
       const offset = (pg - 1) * 25;
 
       const [{ rows: countRows }, { rows }] = await Promise.all([
-        db.query(`SELECT COUNT(*) FROM user_activity WHERE guild_id = $1`, [guildId]),
+        db.query(`SELECT COUNT(*) FROM user_activity WHERE guild_id = $1 AND has_left = FALSE`, [guildId]),
         db.query(
           `SELECT user_id, message_count, voice_minutes, streak_days, is_inactive,
              (message_count * $3 + voice_minutes * $4)                        AS score,
              (SELECT COUNT(*) FROM user_achievements
               WHERE user_id = ua.user_id AND guild_id = ua.guild_id)          AS achievement_count
            FROM user_activity ua
-           WHERE guild_id = $1
+           WHERE guild_id = $1 AND has_left = FALSE
            ORDER BY score DESC
            LIMIT 25 OFFSET $2`,
           [guildId, offset, config.message_weight, config.voice_weight]
@@ -265,7 +265,7 @@ export function startServer(client) {
 
       const { rows: rankRows } = await db.query(
         `SELECT COUNT(*) AS rank FROM user_activity
-         WHERE guild_id = $1 AND (message_count * $3 + voice_minutes * $4) > $2`,
+         WHERE guild_id = $1 AND has_left = FALSE AND (message_count * $3 + voice_minutes * $4) > $2`,
         [guildId, actRows[0].score, config.message_weight, config.voice_weight]
       );
 

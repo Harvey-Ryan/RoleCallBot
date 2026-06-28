@@ -67,6 +67,9 @@ export async function initSchema() {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_ua_guild       ON user_activity (guild_id)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_ua_last_active ON user_activity (guild_id, last_active_at)`);
 
+  await db.query(`ALTER TABLE user_activity ADD COLUMN IF NOT EXISTS has_left BOOLEAN     NOT NULL DEFAULT FALSE`);
+  await db.query(`ALTER TABLE user_activity ADD COLUMN IF NOT EXISTS left_at  TIMESTAMPTZ`);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS achievements (
       id          SERIAL      PRIMARY KEY,
