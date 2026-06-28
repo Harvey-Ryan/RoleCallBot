@@ -462,5 +462,48 @@ export function startServer(client) {
     }
   });
 
+  // ── GET /api/left-members ────────────────────────────────────────────────
+  app.get('/api/left-members', async (req, res) => {
+    const { guildId } = req.query;
+    if (!guildId) return res.status(400).json({ error: 'guildId required' });
+    try {
+      const { rows } = await db.query(
+        `SELECT user_id, message_count, voice_minutes, streak_days, last_active_at, left_at
+         FROM user_activity
+         WHERE guild_id = $1 AND has_left = TRUE
+         ORDER BY left_at DESC NULLS LAST`,
+        [guildId]
+      );
+
+      const guild = client.guilds.cache.get(guildId);
+      const rowsWithMeta = rows.map(r => {
+        const cached = client.users.cache.get(r.user_id);
+        return {
+          ...r,
+          displayName: cached?.displayName ?? cached?.username ?? 'Unknown Member',
+          username:    cached?.username    ?? r.user_id,
+          avatar:      cached?.avatarURL({ size: 64 }) ?? defaultAvatar(r.user_id),
+        };
+      });
+
+      // memberInfo fallback: if still in cache (e.g. shares another guild), prefer guild display name
+      const withGuildMeta = rowsWithMeta.map(r => {
+        const member = guild?.members.cache.get(r.user_id);
+        if (!member) return r;
+        return {
+          ...r,
+          displayName: member.displayName,
+          username:    member.user.username,
+          avatar:      member.user.avatarURL({ size: 64 }) ?? defaultAvatar(r.user_id),
+        };
+      });
+
+      res.json({ rows: withGuildMeta, total: withGuildMeta.length });
+    } catch (err) {
+      console.error('[left-members]', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.listen(PORT, () => console.log(`[dashboard] http://localhost:${PORT}`));
 }

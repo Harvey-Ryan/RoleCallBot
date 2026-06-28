@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS user_activity (
   streak_days      INTEGER     NOT NULL DEFAULT 0,
   last_streak_date DATE,
   is_inactive      BOOLEAN     NOT NULL DEFAULT FALSE,
+  has_left         BOOLEAN     NOT NULL DEFAULT FALSE,
+  left_at          TIMESTAMPTZ,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, guild_id)
 );
