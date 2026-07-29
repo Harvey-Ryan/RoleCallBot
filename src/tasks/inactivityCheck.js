@@ -39,8 +39,8 @@ export function startInactivityCheck(client) {
                 `Inactivity sweep: no activity for ${config.inactivity_days}+ days`,
               ]
             );
-          } catch {
-            // Member may have left the server
+          } catch (err) {
+            console.error(`[inactivityCheck] Failed to update roles for user ${user_id} in guild ${guildId}:`, err.message);
           }
         }
 
