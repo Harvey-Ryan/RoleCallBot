@@ -19,7 +19,7 @@ export function startLeaderboardPost(client) {
           `SELECT user_id, message_count, voice_minutes,
              (message_count * $2 + voice_minutes * $3) AS score
            FROM user_activity
-           WHERE guild_id = $1
+           WHERE guild_id = $1 AND has_left = FALSE AND is_inactive = FALSE
            ORDER BY score DESC
            LIMIT 10`,
           [guildId, config.message_weight, config.voice_weight]

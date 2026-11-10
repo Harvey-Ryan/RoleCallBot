@@ -194,36 +194,47 @@ export function startServer(client) {
 
   // ── GET /api/leaderboard ─────────────────────────────────────────────────
   app.get('/api/leaderboard', async (req, res) => {
-    const { guildId, page = '1' } = req.query;
+    const { guildId, page = '1', includeInactive } = req.query;
     if (!guildId) return res.status(400).json({ error: 'guildId required' });
     try {
       const config = await getGuildConfig(guildId);
       const guild  = client.guilds.cache.get(guildId);
       const pg     = Math.max(1, parseInt(page));
       const offset = (pg - 1) * 25;
+      // Inactive members are hidden unless asked for; ex-members never show.
+      const showInactive = includeInactive === 'true' || includeInactive === '1';
 
       const [{ rows: countRows }, { rows }] = await Promise.all([
-        db.query(`SELECT COUNT(*) FROM user_activity WHERE guild_id = $1 AND has_left = FALSE`, [guildId]),
+        db.query(
+          `SELECT COUNT(*) FILTER (WHERE $2 OR is_inactive = FALSE) AS count,
+                  COUNT(*) FILTER (WHERE is_inactive = TRUE)         AS inactive
+           FROM user_activity WHERE guild_id = $1 AND has_left = FALSE`,
+          [guildId, showInactive]
+        ),
         db.query(
           `SELECT user_id, message_count, voice_minutes, streak_days, is_inactive,
              (message_count * $3 + voice_minutes * $4)                        AS score,
              (SELECT COUNT(*) FROM user_achievements
               WHERE user_id = ua.user_id AND guild_id = ua.guild_id)          AS achievement_count
            FROM user_activity ua
-           WHERE guild_id = $1 AND has_left = FALSE
+           WHERE guild_id = $1 AND has_left = FALSE AND ($5 OR is_inactive = FALSE)
            ORDER BY score DESC
            LIMIT 25 OFFSET $2`,
-          [guildId, offset, config.message_weight, config.voice_weight]
+          [guildId, offset, config.message_weight, config.voice_weight, showInactive]
         ),
       ]);
 
       const total = parseInt(countRows[0].count);
+      const inactiveCount = parseInt(countRows[0].inactive);
       const rowsWithMeta = rows.map(r => ({
         ...r,
         ...memberInfo(guild, r.user_id),
       }));
 
-      res.json({ rows: rowsWithMeta, total, page: pg, totalPages: Math.max(1, Math.ceil(total / 25)) });
+      res.json({
+        rows: rowsWithMeta, total, page: pg, totalPages: Math.max(1, Math.ceil(total / 25)),
+        inactiveCount, inactiveHidden: !showInactive,
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -265,7 +276,8 @@ export function startServer(client) {
 
       const { rows: rankRows } = await db.query(
         `SELECT COUNT(*) AS rank FROM user_activity
-         WHERE guild_id = $1 AND has_left = FALSE AND (message_count * $3 + voice_minutes * $4) > $2`,
+         WHERE guild_id = $1 AND has_left = FALSE AND is_inactive = FALSE
+           AND (message_count * $3 + voice_minutes * $4) > $2`,
         [guildId, actRows[0].score, config.message_weight, config.voice_weight]
       );
 
