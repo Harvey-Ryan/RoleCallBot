@@ -82,7 +82,7 @@ export function buildHelpEmbed() {
       {
         name: '👤 Member Commands',
         value: [
-          '`/leaderboard [page]` — View the activity leaderboard',
+          '`/leaderboard [page]` — View the activity leaderboard (inactive members and members who left are not listed)',
           '`/stats [user]` — View your (or another member\'s) stats',
           '`/achievements [user]` — View earned achievements',
           '`/history [user]` — View role change history (others require Manage Server)',
@@ -93,7 +93,7 @@ export function buildHelpEmbed() {
         name: '⚙️ Admin Commands',
         value: [
           '`/config view` — View current server configuration',
-          '`/config inactivity-days <days>` — Set inactivity threshold',
+          '`/config inactivity-days <days>` — Days without activity before a member is marked inactive and hidden from the leaderboard',
           '`/config active-role <role>` — Role removed on inactivity',
           '`/config inactive-role <role>` — Role assigned on inactivity',
           '`/config achievements-channel <channel>` — Where achievements post',
