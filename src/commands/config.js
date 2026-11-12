@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import { db, getGuildConfig, invalidateConfig } from '../database.js';
 
 export const data = new SlashCommandBuilder()
@@ -81,7 +81,7 @@ const COLUMN_MAP = {
 };
 
 export async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const guildId = interaction.guild.id;
   const sub = interaction.options.getSubcommand();
 
