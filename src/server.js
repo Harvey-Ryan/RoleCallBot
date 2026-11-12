@@ -43,10 +43,37 @@ function heatmapQuery(req, res, defaultDays) {
   const timezone = parseTimezone(req.query.timezone);
   if (!timezone) { res.status(400).json({ error: 'timezone must be an IANA time zone, e.g. America/Chicago' }); return null; }
   const type = req.query.type ?? 'combined';
-  if (!['combined', 'message', 'voice'].includes(type)) {
-    res.status(400).json({ error: 'type must be combined, message, or voice' }); return null;
+  if (!['combined', 'message', 'voice', 'all'].includes(type)) {
+    res.status(400).json({ error: 'type must be combined, message, voice, or all' }); return null;
   }
   return { days, timezone, type };
+}
+
+/**
+ * Week x hour grids from activity_hourly rows (dow, hr, messages, voice_mins).
+ * type 'all' answers with the combined grid plus the message and voice
+ * layers, so a page showing all three asks once instead of three times.
+ */
+function heatmapBody(rows, config, type) {
+  const blank = () => Array.from({ length: 7 }, () => new Array(24).fill(0));
+  const layers = { combined: { grid: blank(), max: 0 }, message: { grid: blank(), max: 0 }, voice: { grid: blank(), max: 0 } };
+  for (const row of rows) {
+    const messages = Number(row.messages);
+    const voice = Number(row.voice_mins);
+    const scores = {
+      combined: messages * Number(config.message_weight) + voice * Number(config.voice_weight),
+      message: messages,
+      voice,
+    };
+    for (const k of Object.keys(layers)) {
+      layers[k].grid[row.dow][row.hr] = scores[k];
+      if (scores[k] > layers[k].max) layers[k].max = scores[k];
+    }
+  }
+  const main = layers[type === 'all' ? 'combined' : type];
+  const body = { type, grid: main.grid, max: main.max };
+  if (type === 'all') body.layers = layers;
+  return body;
 }
 
 function memberInfo(guild, userId) {
@@ -121,21 +148,9 @@ export function startServer(client) {
          GROUP BY dow, hr`,
         [guildId, days, timezone]
       );
-      const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
-      let max = 0;
-      for (const row of rows) {
-        const score = type === 'message'
-          ? Number(row.messages)
-          : type === 'voice'
-            ? Number(row.voice_mins)
-            : Number(row.messages) * Number(config.message_weight) +
-              Number(row.voice_mins) * Number(config.voice_weight);
-        grid[row.dow][row.hr] = score;
-        if (score > max) max = score;
-      }
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=300');
-      res.json({ guild_id: guildId, days: Number(days), timezone, type, grid, max });
+      res.json({ guild_id: guildId, days: Number(days), timezone, ...heatmapBody(rows, config, type) });
     } catch (err) {
       console.error('[public/heatmap]', err);
       res.status(500).json({ error: 'Internal error' });
@@ -458,19 +473,7 @@ export function startServer(client) {
          GROUP BY dow, hr`,
         [guildId, days, timezone]
       );
-      const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
-      let max = 0;
-      for (const row of rows) {
-        const score = type === 'message'
-          ? Number(row.messages)
-          : type === 'voice'
-            ? Number(row.voice_mins)
-            : Number(row.messages) * Number(config.message_weight) +
-              Number(row.voice_mins) * Number(config.voice_weight);
-        grid[row.dow][row.hr] = score;
-        if (score > max) max = score;
-      }
-      res.json({ guild_id: guildId, days: Number(days), timezone, type, grid, max });
+      res.json({ guild_id: guildId, days: Number(days), timezone, ...heatmapBody(rows, config, type) });
     } catch (err) {
       console.error('[heatmap/guild]', err);
       res.status(500).json({ error: 'Internal error' });
@@ -499,19 +502,7 @@ export function startServer(client) {
          GROUP BY dow, hr`,
         [guildId, userId, days, timezone]
       );
-      const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
-      let max = 0;
-      for (const row of rows) {
-        const score = type === 'message'
-          ? Number(row.messages)
-          : type === 'voice'
-            ? Number(row.voice_mins)
-            : Number(row.messages) * Number(config.message_weight) +
-              Number(row.voice_mins) * Number(config.voice_weight);
-        grid[row.dow][row.hr] = score;
-        if (score > max) max = score;
-      }
-      res.json({ user_id: userId, guild_id: guildId, days: Number(days), timezone, type, grid, max });
+      res.json({ user_id: userId, guild_id: guildId, ...heatmapBody(rows, config, type), days: Number(days), timezone });
     } catch (err) {
       console.error('[heatmap/user]', err);
       res.status(500).json({ error: 'Internal error' });
