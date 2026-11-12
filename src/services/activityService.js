@@ -23,7 +23,10 @@ export async function recordMessageActivity(userId, guildId, client) {
        is_inactive      = FALSE,
        has_left         = FALSE,
        left_at          = NULL
-     RETURNING *, (xmax = 0) AS is_new,
+     RETURNING *,
+       -- "new" = no activity before this statement; the row may already exist
+       -- from the nightly member check (silent members), with zero counts.
+       COALESCE((SELECT message_count + voice_minutes FROM user_activity WHERE user_id = $1 AND guild_id = $2), 0) = 0 AS is_new,
        -- subqueries see the row as it was before this statement
        (SELECT is_inactive FROM user_activity WHERE user_id = $1 AND guild_id = $2) AS was_inactive`,
     [userId, guildId, today]
@@ -68,7 +71,10 @@ export async function recordVoiceMinutes(userId, guildId, hours, client) {
        is_inactive      = FALSE,
        has_left         = FALSE,
        left_at          = NULL
-     RETURNING *, (xmax = 0) AS is_new,
+     RETURNING *,
+       -- "new" = no activity before this statement; the row may already exist
+       -- from the nightly member check (silent members), with zero counts.
+       COALESCE((SELECT message_count + voice_minutes FROM user_activity WHERE user_id = $1 AND guild_id = $2), 0) = 0 AS is_new,
        -- subqueries see the row as it was before this statement
        (SELECT is_inactive FROM user_activity WHERE user_id = $1 AND guild_id = $2) AS was_inactive`,
     [userId, guildId, minutes, today]

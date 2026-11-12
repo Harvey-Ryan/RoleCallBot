@@ -42,13 +42,25 @@ export async function reconcileMembers(guild) {
     [guild.id, ids]
   );
 
+  // Members who have never chatted or been in voice get a row too, dated from
+  // when they joined, so the inactivity sweep sees them: someone silent for
+  // longer than the guild's inactivity window is marked inactive like anyone
+  // else. Newer members get the full window from their join date.
+  const humans = [...members.values()].filter(m => !m.user.bot);
+  const { rowCount: added } = await db.query(
+    `INSERT INTO user_activity (user_id, guild_id, last_active_at)
+     SELECT u, $1, j FROM unnest($2::text[], $3::timestamptz[]) AS t(u, j)
+     ON CONFLICT (user_id, guild_id) DO NOTHING`,
+    [guild.id, humans.map(m => m.id), humans.map(m => (m.joinedAt ?? new Date()).toISOString())]
+  );
+
   await logChange(guild.id, left.map(r => r.user_id), 'left_server', 'Not in the server when membership was checked');
   await logChange(guild.id, back.map(r => r.user_id), 'rejoined', 'Back in the server when membership was checked');
 
-  if (left.length || back.length) {
-    console.log(`[membership] ${guild.name}: ${left.length} marked as left, ${back.length} back`);
+  if (left.length || back.length || added) {
+    console.log(`[membership] ${guild.name}: ${left.length} marked as left, ${back.length} back, ${added} silent members now tracked`);
   }
-  return { left: left.length, rejoined: back.length, skipped: false };
+  return { left: left.length, rejoined: back.length, added, skipped: false };
 }
 
 export async function reconcileAllGuilds(client) {
