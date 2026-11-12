@@ -18,12 +18,12 @@ export async function execute(interaction) {
   async function fetchPage(page) {
     const offset = (page - 1) * 10;
     const [{ rows: countRows }, { rows }] = await Promise.all([
-      db.query(`SELECT COUNT(*) FROM user_activity WHERE guild_id = $1 AND has_left = FALSE AND is_inactive = FALSE`, [guildId]),
+      db.query(`SELECT COUNT(*) FROM user_activity WHERE guild_id = $1 AND has_left = FALSE AND is_inactive = FALSE AND (message_count > 0 OR voice_minutes > 0)`, [guildId]),
       db.query(
         `SELECT user_id, message_count, voice_minutes,
            (message_count * $3 + voice_minutes * $4) AS score
          FROM user_activity
-         WHERE guild_id = $1 AND has_left = FALSE AND is_inactive = FALSE
+         WHERE guild_id = $1 AND has_left = FALSE AND is_inactive = FALSE AND (message_count > 0 OR voice_minutes > 0)
          ORDER BY score DESC
          LIMIT 10 OFFSET $2`,
         [guildId, offset, config.message_weight, config.voice_weight]

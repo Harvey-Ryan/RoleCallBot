@@ -101,7 +101,7 @@ export function buildHelpEmbed() {
         name: '⚙️ Admin Commands',
         value: [
           '`/config view` — View current server configuration',
-          '`/config inactivity-days <days>` — Days without activity before a member is marked inactive and hidden from the leaderboard',
+          '`/config inactivity-days <days>` — Days without activity before a member is marked inactive and hidden from the leaderboard (members who never chat or join voice count from when they joined)',
           '`/config active-role <role>` — Role removed on inactivity',
           '`/config inactive-role <role>` — Role assigned on inactivity',
           '`/config achievements-channel <channel>` — Where achievements post',

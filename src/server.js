@@ -250,7 +250,8 @@ export function startServer(client) {
         db.query(
           `SELECT COUNT(*) FILTER (WHERE $2 OR is_inactive = FALSE) AS count,
                   COUNT(*) FILTER (WHERE is_inactive = TRUE)         AS inactive
-           FROM user_activity WHERE guild_id = $1 AND has_left = FALSE`,
+           FROM user_activity
+           WHERE guild_id = $1 AND has_left = FALSE AND (message_count > 0 OR voice_minutes > 0)`,
           [guildId, showInactive]
         ),
         db.query(
@@ -260,6 +261,7 @@ export function startServer(client) {
               WHERE user_id = ua.user_id AND guild_id = ua.guild_id)          AS achievement_count
            FROM user_activity ua
            WHERE guild_id = $1 AND has_left = FALSE AND ($5 OR is_inactive = FALSE)
+             AND (message_count > 0 OR voice_minutes > 0)
            ORDER BY score DESC
            LIMIT 25 OFFSET $2`,
           [guildId, offset, config.message_weight, config.voice_weight, showInactive]
