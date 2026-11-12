@@ -90,6 +90,14 @@ export function buildHelpEmbed() {
         ].join('\n'),
       },
       {
+        name: '📏 What counts',
+        value: [
+          'Messages: at most one per minute counts, so spamming doesn\'t climb the board.',
+          'Voice: each minute in a voice channel with at least one other person, not deafened. The AFK channel and stages don\'t count.',
+          'The scheduled leaderboard post shows the last 7 days (weekly) or the last day (daily).',
+        ].join('\n'),
+      },
+      {
         name: '⚙️ Admin Commands',
         value: [
           '`/config view` — View current server configuration',

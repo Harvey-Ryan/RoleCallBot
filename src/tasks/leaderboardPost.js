@@ -15,14 +15,23 @@ export function startLeaderboardPost(client) {
         const channel = guild.channels.cache.get(config.leaderboard_channel_id);
         if (!channel) continue;
 
+        // The period's activity (last 7 days, or last day), not all-time totals.
+        const days = config.leaderboard_schedule === 'weekly' ? 7 : 1;
         const { rows } = await db.query(
-          `SELECT user_id, message_count, voice_minutes,
-             (message_count * $2 + voice_minutes * $3) AS score
-           FROM user_activity
-           WHERE guild_id = $1 AND has_left = FALSE AND is_inactive = FALSE
+          `SELECT h.user_id,
+                  SUM(h.messages)   AS message_count,
+                  SUM(h.voice_mins) AS voice_minutes,
+                  SUM(h.messages) * $2 + SUM(h.voice_mins) * $3 AS score
+           FROM activity_hourly h
+           JOIN user_activity ua ON ua.user_id = h.user_id AND ua.guild_id = h.guild_id
+           WHERE h.guild_id = $1
+             AND h.hour_utc >= NOW() - ($4 || ' days')::INTERVAL
+             AND ua.has_left = FALSE
+           GROUP BY h.user_id
+           HAVING SUM(h.messages) * $2 + SUM(h.voice_mins) * $3 > 0
            ORDER BY score DESC
            LIMIT 10`,
-          [guildId, config.message_weight, config.voice_weight]
+          [guildId, config.message_weight, config.voice_weight, days]
         );
 
         if (rows.length === 0) continue;
@@ -30,6 +39,7 @@ export function startLeaderboardPost(client) {
         const label = config.leaderboard_schedule === 'weekly' ? 'Weekly' : 'Daily';
         const embed = buildLeaderboardEmbed(rows, 1, 1, guild.name);
         embed.setTitle(`📊 ${label} Leaderboard — ${guild.name}`);
+        embed.setFooter({ text: config.leaderboard_schedule === 'weekly' ? 'Activity in the last 7 days' : 'Activity in the last 24 hours' });
 
         await channel.send({ embeds: [embed] });
       } catch (err) {

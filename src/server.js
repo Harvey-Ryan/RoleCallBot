@@ -11,6 +11,44 @@ function defaultAvatar(userId) {
   }
 }
 
+// The public endpoints (recruitment page) answer only for these servers.
+// PUBLIC_GUILD_IDS: comma-separated; default Fleet 919.
+const PUBLIC_GUILD_IDS = new Set(
+  (process.env.PUBLIC_GUILD_IDS ?? '1497395378495160493').split(',').map(s => s.trim()).filter(Boolean)
+);
+
+/** ?days= as a whole number of days, 1–365 (fallback when missing). Null when invalid. */
+function parseDays(raw, fallback) {
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 365 ? n : null;
+}
+
+/** ?timezone= as an IANA zone Postgres and Intl both know, or null. */
+function parseTimezone(raw) {
+  const tz = raw ?? 'UTC';
+  if (typeof tz !== 'string' || tz.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
+}
+
+/** Shared by the heat map endpoints: checks the query, answers 400 itself when it's wrong. */
+function heatmapQuery(req, res, defaultDays) {
+  const days = parseDays(req.query.days, defaultDays);
+  if (days === null) { res.status(400).json({ error: 'days must be a whole number from 1 to 365' }); return null; }
+  const timezone = parseTimezone(req.query.timezone);
+  if (!timezone) { res.status(400).json({ error: 'timezone must be an IANA time zone, e.g. America/Chicago' }); return null; }
+  const type = req.query.type ?? 'combined';
+  if (!['combined', 'message', 'voice'].includes(type)) {
+    res.status(400).json({ error: 'type must be combined, message, or voice' }); return null;
+  }
+  return { days, timezone, type };
+}
+
 function memberInfo(guild, userId) {
   const member = guild?.members.cache.get(userId);
   return {
@@ -26,7 +64,8 @@ export function startServer(client) {
   const CORS_ORIGIN = process.env.CORS_ORIGIN;
 
   if (!API_KEY) {
-    console.warn('[server] ROLECALL_API_KEY not set — API is unprotected');
+    // Fail closed: without a key, anyone who finds the URL could read and change every server's data.
+    console.error('[server] ROLECALL_API_KEY is not set: the private API refuses every request until it is.');
   }
 
   // ── Public endpoint preflights — must be before the main CORS middleware ───
@@ -61,11 +100,13 @@ export function startServer(client) {
   // No API key required — public endpoint for the recruitment squeeze page.
   // Registered before the auth middleware so it bypasses the key check.
   app.get('/api/public/heatmap', async (req, res) => {
-    const { guildId, days = '365', timezone = 'UTC', type = 'combined' } = req.query;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { guildId } = req.query;
     if (!guildId) return res.status(400).json({ error: 'guildId required' });
-    if (!['combined', 'message', 'voice'].includes(type)) {
-      return res.status(400).json({ error: 'type must be combined, message, or voice' });
-    }
+    if (!PUBLIC_GUILD_IDS.has(guildId)) return res.status(404).json({ error: 'Not found' });
+    const q = heatmapQuery(req, res, 365);
+    if (!q) return;
+    const { days, timezone, type } = q;
     try {
       const config = await getGuildConfig(guildId);
       const { rows } = await db.query(
@@ -110,6 +151,7 @@ export function startServer(client) {
     res.setHeader('Cache-Control', 'public, max-age=300');
     const { guildId } = req.query;
     if (!guildId) return res.status(400).json({ error: 'guildId required' });
+    if (!PUBLIC_GUILD_IDS.has(guildId)) return res.status(404).json({ error: 'Not found' });
     try {
       const { rows } = await db.query(
         `WITH daily AS (
@@ -141,7 +183,7 @@ export function startServer(client) {
 
   // ── API key auth (scoped to /api only) ──────────────────────────────────
   app.use('/api', (req, res, next) => {
-    if (!API_KEY) return next();
+    if (!API_KEY) return res.status(503).json({ error: 'RoleCall API key not configured' });
     const auth = req.headers.authorization;
     if (!auth || auth !== `Bearer ${API_KEY}`) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -395,11 +437,11 @@ export function startServer(client) {
 
   // ── GET /api/heatmap/guild ───────────────────────────────────────────────────
   app.get('/api/heatmap/guild', async (req, res) => {
-    const { guildId, days = '180', timezone = 'UTC', type = 'combined' } = req.query;
+    const { guildId } = req.query;
     if (!guildId) return res.status(400).json({ error: 'guildId required' });
-    if (!['combined', 'message', 'voice'].includes(type)) {
-      return res.status(400).json({ error: 'type must be combined, message, or voice' });
-    }
+    const q = heatmapQuery(req, res, 180);
+    if (!q) return;
+    const { days, timezone, type } = q;
     try {
       const config = await getGuildConfig(guildId);
       const { rows } = await db.query(
@@ -435,11 +477,11 @@ export function startServer(client) {
 
   // ── GET /api/heatmap/user ────────────────────────────────────────────────────
   app.get('/api/heatmap/user', async (req, res) => {
-    const { guildId, userId, days = '180', timezone = 'UTC', type = 'combined' } = req.query;
+    const { guildId, userId } = req.query;
     if (!guildId || !userId) return res.status(400).json({ error: 'guildId and userId required' });
-    if (!['combined', 'message', 'voice'].includes(type)) {
-      return res.status(400).json({ error: 'type must be combined, message, or voice' });
-    }
+    const q = heatmapQuery(req, res, 180);
+    if (!q) return;
+    const { days, timezone, type } = q;
     try {
       const config = await getGuildConfig(guildId);
       const { rows } = await db.query(

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { buildHelpEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
@@ -6,5 +6,5 @@ export const data = new SlashCommandBuilder()
   .setDescription('Show all available commands');
 
 export async function execute(interaction) {
-  await interaction.reply({ embeds: [buildHelpEmbed()], ephemeral: true });
+  await interaction.reply({ embeds: [buildHelpEmbed()], flags: MessageFlags.Ephemeral });
 }
