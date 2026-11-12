@@ -1,9 +1,8 @@
-import { ChannelType } from 'discord.js';
-import { voiceSessions } from './voiceStateUpdate.js';
 import { startInactivityCheck } from '../tasks/inactivityCheck.js';
 import { startLeaderboardPost } from '../tasks/leaderboardPost.js';
 import { startServer } from '../server.js';
 import { reconcileAllGuilds } from '../services/membershipService.js';
+import { startVoiceTracker } from '../services/voiceTracker.js';
 
 export const name = 'ready';
 export const once = true;
@@ -11,16 +10,8 @@ export const once = true;
 export async function execute(client) {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  for (const guild of client.guilds.cache.values()) {
-    for (const channel of guild.channels.cache.values()) {
-      if (channel.type !== ChannelType.GuildVoice) continue;
-      if (channel.id === guild.afkChannelId) continue;
-      for (const [memberId, member] of channel.members) {
-        if (member.user.bot) continue;
-        voiceSessions.set(`${guild.id}:${memberId}`, Date.now());
-      }
-    }
-  }
+  // Voice time: who's in voice is looked at once a minute (services/voiceTracker.js).
+  startVoiceTracker(client);
 
   // Catch up on members who left or rejoined while the bot was offline.
   reconcileAllGuilds(client).catch(err => console.error('[membership] Startup check failed:', err.message));

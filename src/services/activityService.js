@@ -43,7 +43,12 @@ export async function recordMessageActivity(userId, guildId, client) {
   await checkAndAwardAchievements(userId, guildId, activity, activity.is_new, client);
 }
 
-export async function recordVoiceEnd(userId, guildId, minutes, client) {
+/**
+ * Adds voice minutes, each already filed under the hour (UTC, ISO) it happened
+ * in: [[hourIso, minutes], ...]. Called by the voice tracker every few minutes.
+ */
+export async function recordVoiceMinutes(userId, guildId, hours, client) {
+  const minutes = hours.reduce((sum, [, m]) => sum + m, 0);
   if (minutes < 1) return;
 
   const today = new Date().toISOString().split('T')[0];
@@ -74,10 +79,10 @@ export async function recordVoiceEnd(userId, guildId, minutes, client) {
 
   await db.query(
     `INSERT INTO activity_hourly (user_id, guild_id, hour_utc, voice_mins)
-     VALUES ($1, $2, date_trunc('hour', NOW()), $3)
+     SELECT $1, $2, h::timestamptz, m::numeric FROM unnest($3::text[], $4::numeric[]) AS t(h, m)
      ON CONFLICT (user_id, guild_id, hour_utc) DO UPDATE SET
-       voice_mins = activity_hourly.voice_mins + $3`,
-    [userId, guildId, minutes]
+       voice_mins = activity_hourly.voice_mins + EXCLUDED.voice_mins`,
+    [userId, guildId, hours.map(([h]) => h), hours.map(([, m]) => m)]
   );
 
   await checkAndAwardAchievements(userId, guildId, activity, activity.is_new, client);
